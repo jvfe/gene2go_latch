@@ -1,61 +1,81 @@
-import subprocess
 from pathlib import Path
 
+import requests
 from latch import medium_task, workflow
+from latch.functions.secrets import get_secret
 from latch.resources.launch_plan import LaunchPlan
-from latch.types import LatchDir, LatchFile
+from latch.types import LatchFile
 
 from .docs import wf_docs
-from .types import Sample
 
 
 @medium_task
-def run_software(sample: Sample) -> LatchDir:
-    """Task to run a software"""
+def gene2GO_task(gene_name: str) -> LatchFile:
+    """Task to query HumanMine"""
 
-    sample_name = sample.name
-    results_path = "program_results"
-    output_dir = Path(results_path).resolve()
-    output_dir.mkdir(parents=True, exist_ok=True)
+    token = get_secret("HUMANMINE_TOKEN")
 
-    output_prefix = f"{str(output_dir)}/{sample_name}"
+    results_path = "query_results.tsv"
+    output_file = Path(results_path).resolve()
 
-    _run_cmd = [
-        "software",
-        "--in1",
-        sample.read1.local_path,
-        "--in2",
-        sample.read2.local_path,
-        "-o",
-        output_prefix,
-    ]
+    base_url = "https://www.humanmine.org/humanmine/service/template/results"
 
-    subprocess.run(_run_cmd)
+    params = {
+        "name": "Gene_GO",
+        "constraint1": "Gene",
+        "op1": "LOOKUP",
+        "value1": gene_name,
+        "extra1": "H. sapiens",
+        "format": "tab",
+        "token": token,
+    }
 
-    return LatchDir(str(output_dir), f"latch:///{results_path}/{sample_name}")
+    response = requests.get(base_url, params=params)
+
+    with open(output_file, "w") as f:
+
+        header = [
+            "GeneID",
+            "Symbol",
+            "GO_ID",
+            "GO_Term",
+            "GO_Category",
+            "Code",
+            "Parent_GO_ID",
+            "Parent_Go_Term",
+            "GO_Qualifier",
+        ]
+
+        header_string = "\t".join(header) + "\n"
+
+        f.write(header_string)
+        f.write(response.text)
+
+    return LatchFile(str(output_file), f"latch:///gene2GO/{gene_name}_results.tsv")
 
 
 @workflow(wf_docs)
-def test_workflow(sample: Sample) -> LatchDir:
-    """Workflow to do X
+def gene2GO(gene_name: str) -> LatchFile:
+    """Get Gene Ontology terms related to a Human Gene
 
-    Header
+    gene2GO
     ------
 
-    This is a workflow that does X.
+    This is a workflow that queries [HumanMine.org](https://www.humanmine.org/humanmine),
+    acquiring Gene Ontology IDs that are related to an input gene - and how they're
+    related.
+
+    This requires setting up an API token on HumanMine
+    ([see instructions](http://intermine.org/im-docs/docs/web-services/authentication/#authentication-for-existing-user-accounts-permanent-tokens))
+    and setting this input token as one of your secrets (named **HUMANMINE_TOKEN**)
+    - see the [Latch tutorial on how to set up secrets](https://docs.latch.bio/basics/adding_secrets.html?highlight=secret)
 
     """
-    return run_software(sample=sample)
+    return gene2GO_task(gene_name=gene_name)
 
 
 LaunchPlan(
-    test_workflow,
-    "Test Data",
-    {
-        "sample": Sample(
-            name="SRR579292",
-            read1=LatchFile("s3://latch-public/test-data/4318/SRR579292_1.fastq"),
-            read2=LatchFile("s3://latch-public/test-data/4318/SRR579292_2.fastq"),
-        )
-    },
+    gene2GO,
+    "BRCA1-related GO terms",
+    {"gene_name": "BRCA1"},
 )

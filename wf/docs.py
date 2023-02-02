@@ -8,25 +8,24 @@ from latch.types.metadata import (
 )
 
 PARAMS = {
-    "sample": LatchParameter(
-        display_name="Paired-end reads",
-        description="FASTQ files",
+    "gene_name": LatchParameter(
+        display_name="Gene Symbol",
         batch_table_column=True,
     ),
 }
 
 FLOW = [
     Section(
-        "Samples",
+        "Gene Name",
         Text(
-            "Sample provided has to include an identifier for the sample (Sample name)"
-            " and two files corresponding to the reads (paired-end)"
+            "Gene name must follow [HUGO](https://www.genenames.org/)"
+            " nomenclature, e.g. 'BRCA1' or 'PPARG'"
         ),
-        Params("sample"),
+        Params("gene_name"),
     )
 ]
 
-WORKFLOW_NAME = "workflow"
+WORKFLOW_NAME = "gene2GO"
 
 wf_docs = LatchMetadata(
     display_name=WORKFLOW_NAME,
@@ -38,6 +37,6 @@ wf_docs = LatchMetadata(
     repository=f"https://github.com/jvfe/{WORKFLOW_NAME}_latch",
     license="MIT",
     parameters=PARAMS,
-    tags=["NGS"],
+    tags=["Gene Ontology", "HumanMine"],
     flow=FLOW,
 )
